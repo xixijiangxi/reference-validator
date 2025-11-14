@@ -1,0 +1,197 @@
+﻿python : \u2717 未配置 DASHSCOPE_API_KEY，将使用本地规则拆分
+所在位置 C:\Users\renzhaoxi\AppData\Local\Temp\ps-script-f52cd835-ed58-47d2-9d64-2ab3caf0bb30.ps1:75 字符: 68
++ ... eference-validator\backend; python test_full_workflow.py 2>&1 | Out-F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (\u2717 未配置 DASHSCOPE_API_KEY，将使用本地规则拆分:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+未配置 API Key，使用本地规则拆分
+未配置 API Key，使用本地规则提取
+未配置 API Key，使用本地规则提取
+未配置 API Key，使用本地规则提取
+====================================================================================================
+全流程测试报告
+====================================================================================================
+
+测试输入文本:
+[8] Doroszkiewicz J, Mroczko B. New Possibilities in the Therapeutic Approach to Alzheimer's Disease. Int J Mol Sci. 2022;23(16). Published 2022 Aug 10. doi:10.3390/ijms23168902 https://pubmed.ncbi.nlm.nih.gov/36012193/
+
+[9] Zhao Q, Du X, Chen W, Zhang T, Xu Z. Advances in diagnosing mild cognitive impairment and Alzheimer's disease using 11C-PIB- PET/CT and common neuropsychological tests. Front Neurosci. 17:1216215. Published 2023 None. doi:10.3389/fnins.2023.1216215 https://pubmed.ncbi.nlm.nih.gov/37492405/
+
+[10] Li X, Chen B, Xie Y, et al. Polyvalent Aptamers Structure-Mediated Fluorescent Aptasensor for the Early Diagnosis of Alzheimer's Disease by Coupling with HCR and CRISPR-Cas System. Anal Chem. 2025;97(1):793-798.
+
+====================================================================================================
+
+【测试1】拆分参考文献
+----------------------------------------------------------------------------------------------------
+[OK] 拆分成功，共 3 条参考文献
+[OK] 拆分数量正确：3 条
+
+  参考文献 1:
+    ID: ref_1
+    格式: numeric
+    文本: [8] Doroszkiewicz J, Mroczko B. New Possibilities in the Therapeutic Approach to Alzheimer's Disease...
+
+  参考文献 2:
+    ID: ref_2
+    格式: numeric
+    文本: [9] Zhao Q, Du X, Chen W, Zhang T, Xu Z. Advances in diagnosing mild cognitive impairment and Alzhei...
+
+  参考文献 3:
+    ID: ref_3
+    格式: numeric
+    文本: [10] Li X, Chen B, Xie Y, et al. Polyvalent Aptamers Structure-Mediated Fluorescent Aptasensor for t...
+
+
+【测试2】提取关键词
+----------------------------------------------------------------------------------------------------
+
+  处理参考文献 1: ref_1
+  [OK] 提取成功
+    标题: New Possibilities in the Therapeutic Approach to Alzheimer's...
+    作者: ['Doroszkiewicz, J', 'Mroczko, B']
+    期刊: Int J Mol Sci
+    年份: 2022
+    卷号: 23
+    期号: 16
+    页码: N/A
+    DOI: 10.3390/ijms23168902
+    PMID: 36012193
+
+  处理参考文献 2: ref_2
+  [OK] 提取成功
+    标题: Advances in diagnosing mild cognitive impairment and Alzheim...
+    作者: ['Zhao, Q', 'Du, X', 'Chen, W', 'Zhang, T', 'Xu, Z']
+    期刊: Front Neurosci. 17:1216215. Published
+    年份: 2023
+    卷号: N/A
+    期号: N/A
+    页码: N/A
+    DOI: 10.3389/fnins.2023.1216215
+    PMID: 37492405
+
+  处理参考文献 3: ref_3
+  [OK] 提取成功
+    标题: Polyvalent Aptamers Structure-Mediated Fluorescent Aptasenso...
+    作者: ['Li, X', 'Chen, B', 'Xie, Y']
+    期刊: Anal Chem
+    年份: 2025
+    卷号: 97
+    期号: 1
+    页码: 793-798
+    DOI: N/A
+    PMID: N/A
+
+
+【测试3】PubMed 检索
+----------------------------------------------------------------------------------------------------
+
+  检索参考文献 1: ref_1
+  [OK] 检索完成，找到 1 篇文章
+
+    文章 1:
+      PMID: 36012193
+      标题: New Possibilities in the Therapeutic Approach to Alzheimer's...
+      作者: ['Doroszkiewicz, Julia', 'Mroczko, Barbara']...
+      期刊: International journal of molecular sciences
+      年份: 2022
+
+  检索参考文献 2: ref_2
+  [OK] 检索完成，找到 1 篇文章
+
+    文章 1:
+      PMID: 37492405
+      标题: Advances in diagnosing mild cognitive impairment and Alzheim...
+      作者: ['Zhao, Qing', 'Du, Xinxin', 'Chen, Wenhong']...
+      期刊: Frontiers in neuroscience
+      年份: 2023
+
+  检索参考文献 3: ref_3
+  [OK] 检索完成，找到 0 篇文章
+  [WARN] 警告：未找到匹配文章
+
+
+【测试4】一致性对比
+----------------------------------------------------------------------------------------------------
+
+  对比参考文献 1: ref_1
+  [OK] 找到最佳匹配文章
+    相似度: 89.35%
+
+    原始参考文献:
+      标题: New Possibilities in the Therapeutic Approach to Alzheimer's Disease
+      作者: ['Doroszkiewicz, J', 'Mroczko, B']
+      期刊: Int J Mol Sci
+      年份: 2022
+      卷号: 23
+      期号: 16
+      页码: N/A
+      DOI: 10.3390/ijms23168902
+      PMID: 36012193
+
+    PubMed 文章:
+      标题: New Possibilities in the Therapeutic Approach to Alzheimer's Disease.
+      作者: ['Doroszkiewicz, Julia', 'Mroczko, Barbara']
+      期刊: International journal of molecular sciences
+      年份: 2022
+      卷号: 23
+      期号: 16
+      页码: None
+      DOI: None
+      PMID: 36012193
+
+    字段对比:
+      title: {'type': 'different', 'original': "New Possibilities in the Therapeutic Approach to Alzheimer's Disease", 'matched': "New Possibilities in the Therapeutic Approach to Alzheimer's Disease."}
+      authors: {'type': 'different', 'original': ['Doroszkiewicz, J', 'Mroczko, B'], 'matched': ['Doroszkiewicz, Julia', 'Mroczko, Barbara']}
+      journal: {'type': 'different', 'original': 'Int J Mol Sci', 'matched': 'International journal of molecular sciences'}
+      doi: {'type': 'extra', 'value': '10.3390/ijms23168902'}
+
+    [OK] 相似度 >= 80%，匹配成功
+
+  对比参考文献 2: ref_2
+  [OK] 找到最佳匹配文章
+    相似度: 77.82%
+
+    原始参考文献:
+      标题: Advances in diagnosing mild cognitive impairment and Alzheimer's disease using 11C-PIB- PET/CT and common neuropsychological tests
+      作者: ['Zhao, Q', 'Du, X', 'Chen, W', 'Zhang, T', 'Xu, Z']
+      期刊: Front Neurosci. 17:1216215. Published
+      年份: 2023
+      卷号: N/A
+      期号: N/A
+      页码: N/A
+      DOI: 10.3389/fnins.2023.1216215
+      PMID: 37492405
+
+    PubMed 文章:
+      标题: Advances in diagnosing mild cognitive impairment and Alzheimer's disease using 
+      作者: ['Zhao, Qing', 'Du, Xinxin', 'Chen, Wenhong', 'Zhang, Ting', 'Xu, Zhuo']
+      期刊: Frontiers in neuroscience
+      年份: 2023
+      卷号: 17
+      期号: None
+      页码: 1216215
+      DOI: None
+      PMID: 37492405
+
+    字段对比:
+      title: {'type': 'different', 'original': "Advances in diagnosing mild cognitive impairment and Alzheimer's disease using 11C-PIB- PET/CT and common neuropsychological tests", 'matched': "Advances in diagnosing mild cognitive impairment and Alzheimer's disease using "}
+      authors: {'type': 'different', 'original': ['Zhao, Q', 'Du, X', 'Chen, W', 'Zhang, T', 'Xu, Z'], 'matched': ['Zhao, Qing', 'Du, Xinxin', 'Chen, Wenhong', 'Zhang, Ting', 'Xu, Zhuo']}
+      journal: {'type': 'different', 'original': 'Front Neurosci. 17:1216215. Published', 'matched': 'Frontiers in neuroscience'}
+      volume: {'type': 'missing', 'value': '17'}
+      pages: {'type': 'missing', 'value': '1216215'}
+      doi: {'type': 'extra', 'value': '10.3389/fnins.2023.1216215'}
+
+    [WARN] 相似度 50%-80%，部分匹配
+
+  对比参考文献 3: ref_3
+  [FAIL] 无法对比：未找到匹配文章
+
+
+====================================================================================================
+测试总结
+====================================================================================================
+1. 拆分结果: [OK] 通过 (期望3条，实际3条)
+2. 关键词提取: [OK] 通过 (成功3/3)
+3. PubMed检索: [FAIL] 部分失败 (成功2/3)
+4. 一致性对比: 见上方详细对比结果

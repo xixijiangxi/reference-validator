@@ -1,0 +1,12 @@
+示例参考文献列表（可用于测试）
+
+1. Smith J, Doe A. Machine Learning in Medical Research. Nature Medicine. 2023;29(5):1234-1240. doi:10.1038/s41591-023-01234-5
+
+2. Zhang L, Wang H, Li M. Artificial Intelligence Applications in Healthcare. The Lancet. 2023;401(10387):1234-1245.
+
+3. Johnson R, Brown K, Williams S. Deep Learning for Medical Image Analysis. JAMA. 2022;328(10):987-995. PMID: 36156789
+
+4. Chen X, Liu Y. Precision Medicine: Current Status and Future Perspectives. New England Journal of Medicine. 2023;388(15):1423-1432.
+
+5. Anderson M, Taylor P, Davis C. Clinical Decision Support Systems: A Review. BMJ. 2022;378:e068945.
+
