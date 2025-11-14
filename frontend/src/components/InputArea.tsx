@@ -52,22 +52,37 @@ export const InputArea: React.FC<InputAreaProps> = ({ onProcess, loading }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-4">
-      <h2 className="text-xl font-bold mb-4 text-gray-800">用户输入区</h2>
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h2 className="text-xl font-bold mb-4 text-gray-800">Paste Your References</h2>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="请输入参考文献列表，支持多种格式（APA、MLA、AMA、NLM、国标2015等）..."
-        className="w-full h-48 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        className="w-full h-64 p-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm"
         disabled={loading}
       />
       <div className="mt-4 flex justify-end">
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
         >
-          {loading ? '处理中...' : '提交'}
+          {loading ? (
+            <>
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              处理中...
+            </>
+          ) : (
+            <>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Process References
+            </>
+          )}
         </button>
       </div>
     </div>

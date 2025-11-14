@@ -10,6 +10,7 @@ function App() {
   const [processedReferences, setProcessedReferences] = useState<ProcessedReference[]>([]);
   const [loading, setLoading] = useState(false);
   const [detectedFormat, setDetectedFormat] = useState<string>('');
+  const [hasProcessed, setHasProcessed] = useState(false); // 是否已处理过
 
   // 处理输入的参考文献
   const handleProcess = async (refs: ReferenceItem[]) => {
@@ -77,6 +78,7 @@ function App() {
       format_type: ref.format_type || 'original',
     }));
     setProcessedReferences(initialProcessed);
+    setHasProcessed(true); // 标记已处理
     
     setLoading(false);
   };
@@ -138,35 +140,61 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-800">医学科研参考文献校验工具</h1>
+        <div className="max-w-[1800px] mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-800">Research Reference Assistant</h1>
+          <div className="flex items-center gap-4">
+            <button className="text-gray-600 hover:text-gray-800">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+            <button className="text-gray-600 hover:text-gray-800">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </button>
+            <button className="text-gray-600 hover:text-gray-800">
+              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
+                U
+              </div>
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-[1800px] mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6 h-[calc(100vh-120px)]">
-          {/* 左侧：输入区和结果区 */}
-          <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-            <div className="flex-shrink-0">
-              <InputArea onProcess={handleProcess} loading={loading} />
+        {!hasProcessed ? (
+          // 初始状态：只显示输入区
+          <div className="max-w-4xl mx-auto">
+            <InputArea onProcess={handleProcess} loading={loading} />
+          </div>
+        ) : (
+          // 处理后的状态：显示三区域布局
+          <div className="grid grid-cols-12 gap-6">
+            {/* 左侧：输入区和结果区 */}
+            <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
+              <div className="flex-shrink-0">
+                <InputArea onProcess={handleProcess} loading={loading} />
+              </div>
+              {/* 悬浮的结果区 */}
+              <div className="relative">
+                <ResultArea
+                  references={processedReferences}
+                  onUpdate={handleUpdateResults}
+                  detectedFormat={detectedFormat}
+                />
+              </div>
             </div>
-            <div className="flex-1 min-h-0">
-              <ResultArea
-                references={processedReferences}
-                onUpdate={handleUpdateResults}
-                detectedFormat={detectedFormat}
+
+            {/* 右侧：数据展示区 */}
+            <div className="col-span-12 lg:col-span-7">
+              <DataDisplayArea
+                references={references}
+                onReplace={handleReplace}
               />
             </div>
           </div>
-
-          {/* 右侧：数据展示区 */}
-          <div className="col-span-12 lg:col-span-7 min-h-0">
-            <DataDisplayArea
-              references={references}
-              onReplace={handleReplace}
-            />
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );
