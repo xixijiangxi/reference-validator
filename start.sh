@@ -5,7 +5,7 @@ echo ""
 
 echo "Starting Backend Server..."
 cd backend
-python -m uvicorn app.main:app --reload --port 8000 &
+python3 -m uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 
 sleep 3

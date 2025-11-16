@@ -140,8 +140,9 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                 model=self.model,
                 prompt=prompt,
                 temperature=0.1,
-                max_tokens=4000,
-                response_format={'type': 'json_object'} 
+                max_tokens=4000
+                # 注意：json_object 格式要求返回对象，但我们这里需要数组
+                # 所以不设置 response_format，让模型直接返回 JSON 数组
             )
             
             if response is None:
@@ -155,24 +156,31 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                     logger.error("LLM API 响应中 output 为 None，使用本地规则拆分")
                     return self._basic_split(text)
                 
-                if not hasattr(response.output, 'choices') or not response.output.choices:
-                    logger.error("LLM API 响应中 choices 为空，使用本地规则拆分")
-                    return self._basic_split(text)
+                # 尝试多种方式获取响应内容
+                content = None
                 
-                if len(response.output.choices) == 0:
-                    logger.error("LLM API 响应中 choices 列表为空，使用本地规则拆分")
-                    return self._basic_split(text)
+                # 方式1: 检查是否有 text 属性（json_object 格式可能直接返回 text）
+                if hasattr(response.output, 'text') and response.output.text:
+                    content = response.output.text.strip()
+                    logger.info("从 response.output.text 获取内容")
                 
-                choice = response.output.choices[0]
-                if not hasattr(choice, 'message') or choice.message is None:
-                    logger.error("LLM API 响应中 message 为 None，使用本地规则拆分")
-                    return self._basic_split(text)
+                # 方式2: 检查 choices 结构（标准格式）
+                elif hasattr(response.output, 'choices') and response.output.choices:
+                    if len(response.output.choices) > 0:
+                        choice = response.output.choices[0]
+                        if hasattr(choice, 'message') and choice.message:
+                            if hasattr(choice.message, 'content') and choice.message.content:
+                                content = choice.message.content.strip()
+                                logger.info("从 response.output.choices[0].message.content 获取内容")
                 
-                if not hasattr(choice.message, 'content') or choice.message.content is None:
-                    logger.error("LLM API 响应中 content 为 None，使用本地规则拆分")
+                # 如果仍然没有内容，记录详细信息用于调试
+                if content is None:
+                    logger.error("LLM API 响应中无法获取内容")
+                    logger.error(f"response.output 类型: {type(response.output)}")
+                    logger.error(f"response.output 属性: {dir(response.output)}")
+                    if hasattr(response.output, '__dict__'):
+                        logger.error(f"response.output.__dict__: {response.output.__dict__}")
                     return self._basic_split(text)
-                
-                content = choice.message.content.strip()
                 logger.info(f"LLM 返回内容长度: {len(content)} 字符")
                 
                 # 尝试提取JSON部分
@@ -182,13 +190,32 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                     content = content.split("```")[1].split("```")[0].strip()
                 
                 try:
-                    references = json.loads(content)
-                    if isinstance(references, list):
-                        logger.info(f"LLM 成功解析，返回 {len(references)} 条参考文献")
-                        return references
+                    parsed = json.loads(content)
+                    
+                    # 处理不同的 JSON 结构
+                    if isinstance(parsed, list):
+                        # 直接是数组
+                        logger.info(f"LLM 成功解析，返回 {len(parsed)} 条参考文献")
+                        return parsed
+                    elif isinstance(parsed, dict):
+                        # 是对象，尝试查找常见的键
+                        if "references" in parsed:
+                            references = parsed["references"]
+                            if isinstance(references, list):
+                                logger.info(f"LLM 成功解析，从 references 键获取 {len(references)} 条参考文献")
+                                return references
+                        elif "data" in parsed:
+                            references = parsed["data"]
+                            if isinstance(references, list):
+                                logger.info(f"LLM 成功解析，从 data 键获取 {len(references)} 条参考文献")
+                                return references
+                        else:
+                            # 单个对象，转换为列表
+                            logger.info("LLM 返回单个对象，转换为列表")
+                            return [parsed]
                     else:
-                        logger.info(f"LLM 返回单个对象，转换为列表")
-                        return [references]
+                        logger.error(f"LLM 返回了意外的类型: {type(parsed)}")
+                        return self._basic_split(text)
                 except json.JSONDecodeError as e:
                     logger.error(f"LLM 返回内容不是有效的 JSON: {e}")
                     logger.error(f"内容预览: {content[:200]}...")
@@ -250,7 +277,7 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                 prompt=prompt,
                 temperature=0.1,
                 max_tokens=2000,
-                response_format={'type': 'json_object'}
+                response_format={'type': 'json_object'}  # 关键词提取返回单个对象，可以使用 json_object
             )
             
             if response is None:
@@ -264,24 +291,31 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                     logger.error("LLM API 响应中 output 为 None，使用本地规则提取")
                     return self._basic_extract_keywords(reference_text)
                 
-                if not hasattr(response.output, 'choices') or not response.output.choices:
-                    logger.error("LLM API 响应中 choices 为空，使用本地规则提取")
-                    return self._basic_extract_keywords(reference_text)
+                # 尝试多种方式获取响应内容
+                content = None
                 
-                if len(response.output.choices) == 0:
-                    logger.error("LLM API 响应中 choices 列表为空，使用本地规则提取")
-                    return self._basic_extract_keywords(reference_text)
+                # 方式1: 检查是否有 text 属性（json_object 格式可能直接返回 text）
+                if hasattr(response.output, 'text') and response.output.text:
+                    content = response.output.text.strip()
+                    logger.info("从 response.output.text 获取内容")
                 
-                choice = response.output.choices[0]
-                if not hasattr(choice, 'message') or choice.message is None:
-                    logger.error("LLM API 响应中 message 为 None，使用本地规则提取")
-                    return self._basic_extract_keywords(reference_text)
+                # 方式2: 检查 choices 结构（标准格式）
+                elif hasattr(response.output, 'choices') and response.output.choices:
+                    if len(response.output.choices) > 0:
+                        choice = response.output.choices[0]
+                        if hasattr(choice, 'message') and choice.message:
+                            if hasattr(choice.message, 'content') and choice.message.content:
+                                content = choice.message.content.strip()
+                                logger.info("从 response.output.choices[0].message.content 获取内容")
                 
-                if not hasattr(choice.message, 'content') or choice.message.content is None:
-                    logger.error("LLM API 响应中 content 为 None，使用本地规则提取")
+                # 如果仍然没有内容，记录详细信息用于调试
+                if content is None:
+                    logger.error("LLM API 响应中无法获取内容")
+                    logger.error(f"response.output 类型: {type(response.output)}")
+                    logger.error(f"response.output 属性: {dir(response.output)}")
+                    if hasattr(response.output, '__dict__'):
+                        logger.error(f"response.output.__dict__: {response.output.__dict__}")
                     return self._basic_extract_keywords(reference_text)
-                
-                content = choice.message.content.strip()
                 logger.info(f"LLM 返回内容长度: {len(content)} 字符")
                 
                 # 尝试提取JSON部分
@@ -291,9 +325,24 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                     content = content.split("```")[1].split("```")[0].strip()
                 
                 try:
-                    keywords = json.loads(content)
-                    logger.info(f"LLM 成功解析关键词")
-                    return keywords
+                    parsed = json.loads(content)
+                    
+                    # 处理不同的 JSON 结构
+                    if isinstance(parsed, dict):
+                        # 如果是对象，检查是否是包装对象
+                        # json_object 格式可能返回 {"keywords": {...}} 或直接返回 {...}
+                        if len(parsed) == 1 and ("keywords" in parsed or "data" in parsed):
+                            # 可能是包装对象，提取内部对象
+                            keywords = parsed.get("keywords") or parsed.get("data")
+                            if isinstance(keywords, dict):
+                                logger.info("LLM 成功解析关键词（从包装对象中提取）")
+                                return keywords
+                        # 直接是关键词对象
+                        logger.info("LLM 成功解析关键词")
+                        return parsed
+                    else:
+                        logger.error(f"LLM 返回了意外的类型: {type(parsed)}，期望 dict")
+                        return self._basic_extract_keywords(reference_text)
                 except json.JSONDecodeError as e:
                     logger.error(f"LLM 返回内容不是有效的 JSON: {e}")
                     logger.error(f"内容预览: {content[:200]}...")

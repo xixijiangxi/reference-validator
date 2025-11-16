@@ -11,6 +11,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [detectedFormat, setDetectedFormat] = useState<string>('');
   const [hasProcessed, setHasProcessed] = useState(false); // 是否已处理过
+  const [progressStatus, setProgressStatus] = useState<string>(''); // 进度状态
+  const [isDataAreaCollapsed, setIsDataAreaCollapsed] = useState(false); // 右侧区域是否收缩
+  const [inputAreaHeight, setInputAreaHeight] = useState<number>(80); // 输入区高度（像素），默认80px
 
   // 处理输入的参考文献
   const handleProcess = async (refs: ReferenceItem[]) => {
@@ -20,7 +23,12 @@ function App() {
     setLoading(true);
     setReferences(refs);
 
+    // 关键词提取状态（拆分已在InputArea中显示）
+    setProgressStatus('关键词提取...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // 为每条参考文献搜索匹配的文章
+    setProgressStatus('PubMed检索与匹配...');
     const updatedRefs = await Promise.all(
       refs.map(async (ref, idx) => {
         console.log(`\n【前端 App】处理第 ${idx + 1}/${refs.length} 条: ${ref.id}`);
@@ -81,6 +89,7 @@ function App() {
     setHasProcessed(true); // 标记已处理
     
     setLoading(false);
+    setProgressStatus(''); // 清除进度状态
   };
 
   // 替换参考文献（使用完整关键词，不含PMID）
@@ -142,42 +151,85 @@ function App() {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-[1800px] mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800">Research Reference Assistant</h1>
-          <div className="flex items-center gap-4">
-            <button className="text-gray-600 hover:text-gray-800">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-            <button className="text-gray-600 hover:text-gray-800">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <button className="text-gray-600 hover:text-gray-800">
-              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
-                U
-              </div>
-            </button>
-          </div>
+          {/* 隐藏右上角功能键 */}
         </div>
       </header>
 
-      <main className="max-w-[1800px] mx-auto px-4 py-6">
+      <main className="max-w-[1800px] mx-auto px-4 py-6 h-[calc(100vh-80px)] flex flex-col">
         {!hasProcessed ? (
           // 初始状态：只显示输入区
-          <div className="max-w-4xl mx-auto">
-            <InputArea onProcess={handleProcess} loading={loading} />
+          <div className="max-w-4xl mx-auto w-full">
+            <InputArea 
+              onProcess={handleProcess} 
+              loading={loading} 
+              progressStatus={progressStatus}
+              isCompact={false}
+              onProgressChange={setProgressStatus}
+            />
           </div>
         ) : (
           // 处理后的状态：显示三区域布局
-          <div className="grid grid-cols-12 gap-6">
-            {/* 左侧：输入区和结果区 */}
-            <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-              <div className="flex-shrink-0">
-                <InputArea onProcess={handleProcess} loading={loading} />
+          <div className="flex-1 flex gap-6 overflow-hidden">
+            {/* 左侧：输入区和结果区 - 可拖拽调整高度 */}
+            <div 
+              className={`flex flex-col transition-all duration-300 ${isDataAreaCollapsed ? 'flex-1' : 'w-5/12'} relative`}
+              style={{ height: '100%' }}
+            >
+              {/* 输入区 - 紧凑模式 */}
+              <div 
+                className="relative overflow-hidden"
+                style={{ 
+                  height: `${inputAreaHeight}px`, 
+                  minHeight: '80px', 
+                  maxHeight: 'calc(100% - 200px)',
+                  flexShrink: 0
+                }}
+              >
+                <div className="h-full">
+                  <InputArea 
+                    onProcess={handleProcess} 
+                    loading={loading} 
+                    progressStatus={progressStatus}
+                    isCompact={true}
+                    onProgressChange={setProgressStatus}
+                  />
+                </div>
               </div>
-              {/* 悬浮的结果区 */}
-              <div className="relative">
+              {/* 拖拽条 */}
+              <div
+                className="h-2 bg-gray-200 hover:bg-purple-400 cursor-row-resize transition-colors z-20 flex items-center justify-center group flex-shrink-0"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const startY = e.clientY;
+                  const startHeight = inputAreaHeight;
+                  
+                  const handleMouseMove = (moveEvent: MouseEvent) => {
+                    const deltaY = moveEvent.clientY - startY;
+                    const newHeight = Math.max(100, Math.min(window.innerHeight - 300, startHeight + deltaY));
+                    setInputAreaHeight(newHeight);
+                  };
+                  
+                  const handleMouseUp = () => {
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                  };
+                  
+                  document.body.style.cursor = 'row-resize';
+                  document.body.style.userSelect = 'none';
+                  document.addEventListener('mousemove', handleMouseMove);
+                  document.addEventListener('mouseup', handleMouseUp);
+                }}
+              >
+                <div className="w-12 h-0.5 bg-gray-400 group-hover:bg-purple-600 transition-colors"></div>
+              </div>
+              {/* 结果区 - 占据剩余高度 */}
+              <div 
+                className="flex-1 min-h-0 overflow-hidden"
+                style={{ height: `calc(100% - ${inputAreaHeight + 8}px)` }}
+              >
                 <ResultArea
                   references={processedReferences}
                   onUpdate={handleUpdateResults}
@@ -186,12 +238,50 @@ function App() {
               </div>
             </div>
 
-            {/* 右侧：数据展示区 */}
-            <div className="col-span-12 lg:col-span-7">
-              <DataDisplayArea
-                references={references}
-                onReplace={handleReplace}
-              />
+            {/* 右侧：数据展示区 - 可收缩 */}
+            <div className={`relative transition-all duration-300 ${isDataAreaCollapsed ? 'w-8' : 'w-7/12'}`}>
+              {isDataAreaCollapsed ? (
+                // 收缩状态：显示箭头按钮
+                <button
+                  onClick={() => setIsDataAreaCollapsed(false)}
+                  className="w-full h-full bg-white rounded-lg shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors group"
+                  title="展开数据展示区"
+                >
+                  <svg 
+                    className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+              ) : (
+                // 展开状态：显示数据展示区和收缩按钮
+                <div className="h-full flex flex-col">
+                  <div className="flex-1 min-h-0">
+                    <DataDisplayArea
+                      references={references}
+                      onReplace={handleReplace}
+                    />
+                  </div>
+                  {/* 收缩按钮 */}
+                  <button
+                    onClick={() => setIsDataAreaCollapsed(true)}
+                    className="absolute top-1/2 -left-4 transform -translate-y-1/2 w-8 h-16 bg-white rounded-l-lg shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors group border border-r-0 border-gray-200"
+                    title="收缩数据展示区"
+                  >
+                    <svg 
+                      className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
