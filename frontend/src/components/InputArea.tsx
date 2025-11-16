@@ -64,9 +64,6 @@ export const InputArea: React.FC<InputAreaProps> = ({ onProcess, loading, progre
 
   return (
     <div className={`bg-white rounded-lg shadow-md h-full flex flex-col ${isCompact ? 'p-3' : 'p-6'}`}>
-      {!isCompact && (
-        <h2 className="text-xl font-bold mb-4 text-gray-800">Paste Your References</h2>
-      )}
       {isCompact ? (
         // 紧凑模式：可调整高度的输入
         <div className="flex flex-col flex-1 min-h-0">
@@ -138,7 +135,7 @@ export const InputArea: React.FC<InputAreaProps> = ({ onProcess, loading, progre
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
-                  Process References
+                  开始校验
                 </>
               )}
             </button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { InputArea } from './components/InputArea';
 import { DataDisplayArea } from './components/DataDisplayArea';
 import { ResultArea } from './components/ResultArea';
@@ -125,7 +125,7 @@ function App() {
   };
 
   // 格式化参考文献文本（使用关键词对象，不含PMID）
-  const formatReference = (keywords: ReferenceKeyword, formatType: string): string => {
+  const formatReference = (keywords: ReferenceKeyword, _formatType: string): string => {
     const { title, authors, journal, year, volume, issue, pages, doi } = keywords;
 
     // 简单的格式化逻辑，可以根据formatType扩展
@@ -150,7 +150,7 @@ function App() {
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-[1800px] mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">Research Reference Assistant</h1>
+          <h1 className="text-2xl font-bold text-gray-800">参考文献校验工具</h1>
           {/* 隐藏右上角功能键 */}
         </div>
       </header>
