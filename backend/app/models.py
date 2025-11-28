@@ -30,6 +30,7 @@ class PubMedArticle(BaseModel):
     keywords: ReferenceKeyword = Field(default_factory=ReferenceKeyword)
     similarity_score: float = 0.0
     differences: Dict[str, Any] = Field(default_factory=dict)
+    match_type: Optional[str] = None  # "doi_match" 或 "pmid_match"，表示通过DOI或PMID匹配到的文章
 
 
 class ReferenceItem(BaseModel):

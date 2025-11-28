@@ -56,7 +56,9 @@ class LLMService:
 6. AMA格式
 7. NLM格式
 
+
 参考文献格式示例：
+
 1. 通用顺序编码制
 规则说明：
 引用序号用方括号标注，格式为：[序号] 作者. 标题. 期刊, 年份, 卷(期): 起止页码. DOI
@@ -109,12 +111,12 @@ Yang Y, Qiu L. Research progress on the pathogenesis, diagnosis, and drug therap
 格式要点说明：
 顺序编码制和著者-出版年制为国内常用格式
 GB/T 7714-2015是中国国家标准，支持双语引用
-APA 7强调DOI和超链接格式
-MLA 9对作者姓名和标题大小写有严格要求
-AMA 11使用期刊标准缩写，句末使用句号
+APA强调DOI和超链接格式
+MLA对作者姓名和标题大小写有严格要求
+AMA使用期刊标准缩写，句末使用句号
 NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
 【任务】
-1、请识别每条参考文献的边界（如果有多余字符请删除，如被切断请合并），根据用户输入的内容识别有几条参考文献。
+1、请识别每条参考文献的边界（如果有无关字符请删除，如被切断的一条内容请合并），根据用户输入的内容识别有几条参考文献。
 2、识别用户输入的参考文献的格式，如果你觉得不属于任何一种标准格式，请返回"original"。
 需要返回JSON格式的结果。
 
@@ -237,7 +239,7 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
         """从参考文献文本中提取关键词"""
         prompt = f"""你是一个专业的医学科研论文专家，也是拥有多年经验的专业审稿人，熟悉常见参考文献著录格式的专家。请从以下参考文献文本中提取所有可识别的信息。
 
-请提取以下字段（如果存在）：
+请提取以下字段（如果存在），不相关的连字符如"-""，""。""；"".""：""/"" "https://doi.org/"等URL前缀请删除：
 - title: 文章标题
 - authors: 作者列表（数组格式）
 - journal: 期刊名称
@@ -607,4 +609,278 @@ NLM格式采用PubMed标准，期刊名需使用NLM官方缩写
                 result["pmid"] = url_match.group(1)
 
         return result
+    
+    def evaluate_similarity_with_llm(self, original: Dict[str, Any], candidates: List[Dict[str, Any]], 
+                                     is_final_evaluation: bool = False, exclude_doi_pmid: bool = False) -> List[tuple]:
+        """使用大模型评估原始参考文献与候选文章的相似度
+        
+        Args:
+            original: 原始参考文献的关键词
+            candidates: 候选文章列表（每个元素包含文章信息）
+            is_final_evaluation: 是否为最终评估（True=最终评估，False=检索阶段评估）
+        
+        Returns:
+            List[tuple]: [(相似度分数, 文章信息), ...] 按相似度降序排序
+        """
+        if not api_key:
+            logger.warning("未配置 API Key，无法使用大模型评估相似度")
+            return []
+        
+        if not candidates:
+            return []
+        
+        evaluation_type = "最终评估" if is_final_evaluation else "检索阶段评估"
+        if exclude_doi_pmid:
+            logger.info(f"使用大模型进行{evaluation_type}，评估 {len(candidates)} 篇候选文章的相似度（排除DOI/PMID字段）")
+        else:
+            logger.info(f"使用大模型进行{evaluation_type}，评估 {len(candidates)} 篇候选文章的相似度")
+        
+        # 构建提示词
+        original_text = self._format_reference_for_llm(original)
+        candidates_text = "\n\n".join([
+            f"候选文章 {idx + 1}:\n{self._format_reference_for_llm(candidate)}"
+            for idx, candidate in enumerate(candidates)
+        ])
+        
+        # 根据评估类型选择不同的提示词
+        if is_final_evaluation:
+            # 最终评估提示词：更详细，需要从多个候选中精确选择
+            prompt = f"""你是一个专业的医学科研论文专家，也是拥有多年经验的专业审稿人。现在需要从多个候选文章中，选择与原始参考文献最可能是同一篇的文章。
+
+这是**最终评估阶段**，需要从多个候选中精确选择最可能的文章。请仔细比较所有候选文章，选择最匹配的一篇。
+
+评估标准（按重要性排序）：
+1. DOI/PMID匹配：如果DOI或PMID完全匹配，且其他字段也高度相似，相似度应为100%。如果DOI/PMID匹配但其他字段完全不匹配，可能是DOI/PMID错误，相似度应较低（<0.5）。
+2. 标题相似度：考虑标题的语义相似性，而不仅仅是字符匹配。例如：
+   - "Machine Learning in Medicine" 和 "ML Applications in Medical Research" 应该被认为是相似的
+   - 缩写、简写、同义词应该被识别为相似，特殊符号/连字符/无用符号可忽略
+   - 标题是判断文章是否相同的关键指标
+3. 作者相似度：考虑作者名称的不同格式（如 "Smith J" vs "Smith, J" vs "Smith John"），特殊符号/连字符/无用符号可忽略
+   - 第一作者匹配非常重要
+   - 作者列表的匹配度也很重要
+4. 期刊相似度：考虑期刊名称的缩写和全名（如 "Nature Med" vs "Nature Medicine"），特殊符号/连字符/无用符号可忽略
+5. 年份、卷号、期号：这些字段的匹配可以进一步确认文章是否相同，特殊符号/连字符/无用符号可忽略
+6. 页码：辅助判断，特殊符号/连字符/无用符号可忽略
+
+原始参考文献：
+{original_text}
+
+候选文章：
+{candidates_text}
+
+请综合为每篇候选文章评估相似度（0.0-1.0），并返回JSON格式。
+
+**重要评估原则**：
+1. 如果存在DOI/PMID匹配但其他字段完全不匹配的文章，相似度应设置为较低值（<0.5），表示可能是DOI/PMID错误。
+2. 如果经过仔细评估后，你认为所有候选文章都不是与原始参考文献同一篇的文章，请将所有文章的相似度都设置为较低值（<0.3），表示没有找到匹配的文章。
+3. 只有当候选文章与原始参考文献在关键字段（标题、作者、期刊等）高度相似时，才应该给出较高的相似度（>0.7）。
+
+{{
+  "results": [
+    {{
+      "index": 1,
+      "similarity": 0.95,
+      "reason": "DOI完全匹配，标题高度相似，作者匹配，期刊匹配"
+    }},
+    {{
+      "index": 2,
+      "similarity": 0.25,
+      "reason": "DOI匹配但标题、作者、期刊完全不匹配，可能是DOI错误"
+    }},
+    {{
+      "index": 3,
+      "similarity": 0.82,
+      "reason": "标题语义相似，作者匹配，期刊匹配，但无DOI"
+    }},
+    {{
+      "index": 4,
+      "similarity": 0.15,
+      "reason": "所有字段都不匹配，不是同一篇文章"
+    }}
+  ]
+}}
+
+只返回JSON对象，不要添加任何其他说明文字。"""
+        else:
+            # 检索阶段提示词：快速筛选，关注关键字段
+            if exclude_doi_pmid:
+                # 已通过DOI/PMID检索过，排除DOI/PMID字段
+                doi_pmid_note = "\n**注意**：原始参考文献的DOI/PMID已经通过之前的检索阶段评估过，本次评估**不**考虑DOI/PMID匹配，只关注其他字段（标题、作者、期刊等）的匹配。"
+                evaluation_standards = """评估标准（按重要性排序）：
+1. **标题相似度**：考虑标题的语义相似性，缩写、简写、同义词应被识别为相似，特殊符号/连字符/无用符号可忽略。标题是判断文章是否相同的关键指标。
+2. **作者相似度**：考虑作者名称的不同格式（如 "Smith J" vs "Smith, J" vs "Smith John"），第一作者匹配非常重要，特殊符号/连字符/无用符号可忽略。
+3. **期刊相似度**：考虑期刊名称的缩写和全名（如 "Nature Med" vs "Nature Medicine"），特殊符号/连字符/无用符号可忽略。
+4. **年份、卷号、期号、页码**：辅助判断，特殊符号/连字符/无用符号可忽略。"""
+            else:
+                # 未排除DOI/PMID，正常评估
+                doi_pmid_note = ""
+                evaluation_standards = """评估标准：
+1. **DOI/PMID匹配**：如果DOI或PMID匹配，且其他字段也高度相似，相似度应为>0.9。如果DOI/PMID匹配但其他字段完全不匹配，相似度应较低（<0.5）。
+2. **标题相似度**：考虑标题的语义相似性，缩写、简写、同义词应被识别为相似，特殊符号/连字符/无用符号可忽略。
+3. **作者相似度**：考虑作者名称的不同格式（如 "Smith J" vs "Smith, J" vs "Smith John"），第一作者匹配很重要，特殊符号/连字符/无用符号可忽略。
+4. **期刊相似度**：考虑期刊名称的缩写和全名（如 "Nature Med" vs "Nature Medicine"），特殊符号/连字符/无用符号可忽略。
+5. **年份、卷号、期号、页码**：辅助判断，特殊符号/连字符/无用符号可忽略。"""
+            
+            prompt = f"""你是一个专业的医学科研论文专家，也是拥有多年经验的专业审稿人。请快速评估原始参考文献与以下候选文章的相似度。
+
+这是**检索阶段评估**，需要快速筛选，重点关注关键字段的匹配。{doi_pmid_note}
+
+{evaluation_standards}
+
+原始参考文献：
+{original_text}
+
+候选文章：
+{candidates_text}
+
+请为每篇候选文章评估相似度（0.0-1.0），并返回JSON格式："""
+            
+            if exclude_doi_pmid:
+                prompt += """
+{{
+  "results": [
+    {{
+      "index": 1,
+      "similarity": 0.92,
+      "reason": "标题高度相似，作者匹配，期刊匹配"
+    }},
+    {{
+      "index": 2,
+      "similarity": 0.75,
+      "reason": "标题语义相似，作者匹配，但期刊缩写不同"
+    }},
+    {{
+      "index": 3,
+      "similarity": 0.25,
+      "reason": "标题、作者、期刊都不匹配，不是同一篇文章"
+    }}
+  ]
+}}
+
+只返回JSON对象，不要添加任何其他说明文字。"""
+            else:
+                prompt += """
+{{
+  "results": [
+    {{
+      "index": 1,
+      "similarity": 0.95,
+      "reason": "DOI完全匹配，标题高度相似"
+    }},
+    {{
+      "index": 2,
+      "similarity": 0.72,
+      "reason": "标题语义相似，作者匹配，但期刊缩写不同"
+    }},
+    {{
+      "index": 3,
+      "similarity": 0.35,
+      "reason": "DOI匹配但其他字段不匹配，可能是DOI错误"
+    }}
+  ]
+}}
+
+只返回JSON对象，不要添加任何其他说明文字。"""
+        
+        try:
+            logger.info("调用 LLM API 评估相似度...")
+            response = dashscope.Generation.call(
+                model=self.model,
+                prompt=prompt,
+                temperature=0.1,
+                max_tokens=2000,
+                response_format={'type': 'json_object'}
+            )
+            
+            if response is None or response.status_code != 200:
+                logger.error(f"LLM API 返回错误: {response.status_code if response else 'None'}")
+                return []
+            
+            # 获取响应内容
+            content = None
+            if hasattr(response.output, 'text') and response.output.text:
+                content = response.output.text.strip()
+            elif hasattr(response.output, 'choices') and response.output.choices:
+                if len(response.output.choices) > 0:
+                    choice = response.output.choices[0]
+                    if hasattr(choice, 'message') and choice.message:
+                        if hasattr(choice.message, 'content') and choice.message.content:
+                            content = choice.message.content.strip()
+            
+            if content is None:
+                logger.error("LLM API 响应中无法获取内容")
+                return []
+            
+            # 提取JSON部分
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            parsed = json.loads(content)
+            
+            # 处理不同的JSON结构
+            results = parsed.get("results", [])
+            if not results:
+                # 可能直接是数组
+                if isinstance(parsed, list):
+                    results = parsed
+                else:
+                    logger.error("LLM 返回格式不正确")
+                    return []
+            
+            # 构建结果列表
+            scored_results = []
+            for result in results:
+                idx = result.get("index", 0) - 1  # 转换为0-based索引
+                similarity = float(result.get("similarity", 0.0))
+                reason = result.get("reason", "")
+                
+                if 0 <= idx < len(candidates):
+                    logger.info(f"  候选文章 {idx + 1}: 相似度={similarity:.4f}, 原因={reason}")
+                    scored_results.append((similarity, candidates[idx]))
+            
+            # 按相似度降序排序
+            scored_results.sort(key=lambda x: x[0], reverse=True)
+            logger.info(f"大模型评估完成，共评估 {len(scored_results)} 篇文章")
+            
+            return scored_results
+            
+        except Exception as e:
+            logger.error(f"大模型评估相似度时出错: {str(e)}", exc_info=True)
+            return []
+    
+    def _format_reference_for_llm(self, ref: Dict[str, Any]) -> str:
+        """将参考文献格式化为易于LLM理解的文本"""
+        parts = []
+        
+        if ref.get("title"):
+            parts.append(f"标题: {ref['title']}")
+        
+        if ref.get("authors"):
+            authors = ref["authors"] if isinstance(ref["authors"], list) else [ref["authors"]]
+            parts.append(f"作者: {', '.join(authors)}")
+        
+        if ref.get("journal"):
+            parts.append(f"期刊: {ref['journal']}")
+        
+        if ref.get("year"):
+            parts.append(f"年份: {ref['year']}")
+        
+        if ref.get("volume"):
+            parts.append(f"卷号: {ref['volume']}")
+        
+        if ref.get("issue"):
+            parts.append(f"期号: {ref['issue']}")
+        
+        if ref.get("pages"):
+            parts.append(f"页码: {ref['pages']}")
+        
+        if ref.get("doi"):
+            parts.append(f"DOI: {ref['doi']}")
+        
+        if ref.get("pmid"):
+            parts.append(f"PMID: {ref['pmid']}")
+        
+        return "\n".join(parts) if parts else "信息不完整"
 

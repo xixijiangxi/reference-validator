@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from difflib import SequenceMatcher
 import logging
 
@@ -22,37 +22,102 @@ class SimilarityService:
             "pages": 0.0
         }
     
-    def calculate_similarity(self, original: Dict[str, Any], matched: Dict[str, Any]) -> float:
-        """计算两个参考文献的相似度"""
+    def calculate_similarity_batch(
+        self, 
+        original: Dict[str, Any], 
+        candidates: List[Dict[str, Any]],
+        use_smart_matching: bool = False,
+        exclude_doi_pmid: bool = False
+    ) -> List[tuple]:
+        """批量计算相似度，支持传统方法和智能匹配
+        
+        Args:
+            original: 原始参考文献的关键词
+            candidates: 候选文章列表
+            use_smart_matching: 是否使用大模型智能匹配
+        
+        Returns:
+            List[tuple]: [(相似度分数, 文章信息), ...] 按相似度降序排序
+        """
+        if use_smart_matching:
+            # 使用大模型评估
+            try:
+                from app.services.llm_service import LLMService
+                llm_service = LLMService()
+                # 默认是检索阶段评估（is_final_evaluation=False）
+                return llm_service.evaluate_similarity_with_llm(original, candidates, is_final_evaluation=False, exclude_doi_pmid=exclude_doi_pmid)
+            except Exception as e:
+                logger.error(f"大模型评估失败，回退到传统方法: {str(e)}", exc_info=True)
+                # 回退到传统方法
+                return self._calculate_similarity_batch_traditional(original, candidates, exclude_doi_pmid=exclude_doi_pmid)
+        else:
+            # 使用传统方法
+            return self._calculate_similarity_batch_traditional(original, candidates, exclude_doi_pmid=exclude_doi_pmid)
+    
+    def _calculate_similarity_batch_traditional(
+        self, 
+        original: Dict[str, Any], 
+        candidates: List[Dict[str, Any]],
+        exclude_doi_pmid: bool = False
+    ) -> List[tuple]:
+        """使用传统方法批量计算相似度"""
+        scored_results = []
+        for candidate in candidates:
+            similarity = self.calculate_similarity(original, candidate, exclude_doi_pmid=exclude_doi_pmid)
+            scored_results.append((similarity, candidate))
+        
+        # 按相似度降序排序
+        scored_results.sort(key=lambda x: x[0], reverse=True)
+        return scored_results
+    
+    def calculate_similarity(self, original: Dict[str, Any], matched: Dict[str, Any], exclude_doi_pmid: bool = False) -> float:
+        """计算两个参考文献的相似度
+        
+        Args:
+            original: 原始参考文献的关键词
+            matched: 匹配文章的关键词
+            exclude_doi_pmid: 是否排除DOI/PMID字段（用于后续检索阶段）
+        """
         logger.info("+" * 80)
         logger.info("开始计算相似度")
         logger.info(f"原始关键词: {original}")
         logger.info(f"匹配文章关键词: {matched}")
+        if exclude_doi_pmid:
+            logger.info("  排除DOI/PMID字段，专注于其他字段匹配")
         
         total_score = 0.0
         total_weight = 0.0
         details = []
         
-        # DOI完全匹配
-        if original.get("doi") and matched.get("doi"):
-            if original["doi"].lower().strip() == matched["doi"].lower().strip():
-                logger.info(f"  [DOI] 完全匹配: {original['doi']} == {matched['doi']}, 相似度=100%")
-                return 1.0  # 100%匹配
-            else:
-                # DOI不匹配，相似度降低
-                total_score += 0.0
-                total_weight += self.weights["doi"]
-                details.append(f"DOI不匹配: {original['doi']} != {matched['doi']}")
-        
-        # PMID完全匹配
-        if original.get("pmid") and matched.get("pmid"):
-            if str(original["pmid"]).strip() == str(matched["pmid"]).strip():
-                total_score += 1.0 * self.weights["pmid"]
-                total_weight += self.weights["pmid"]
-                details.append(f"PMID匹配 (权重{self.weights['pmid']}): 得分1.0")
-            else:
-                total_weight += self.weights["pmid"]
-                details.append(f"PMID不匹配: {original['pmid']} != {matched['pmid']}")
+        # DOI完全匹配（但不直接返回，继续计算其他字段以检测冲突）
+        if not exclude_doi_pmid:
+            doi_matched = False
+            if original.get("doi") and matched.get("doi"):
+                if original["doi"].lower().strip() == matched["doi"].lower().strip():
+                    doi_matched = True
+                    total_score += 1.0 * self.weights["doi"]
+                    total_weight += self.weights["doi"]
+                    details.append(f"DOI完全匹配 (权重{self.weights['doi']}): 得分1.0")
+                else:
+                    # DOI不匹配，相似度降低
+                    total_score += 0.0
+                    total_weight += self.weights["doi"]
+                    details.append(f"DOI不匹配: {original['doi']} != {matched['doi']}")
+            
+            # 如果DOI匹配且没有其他字段，直接返回100%
+            if doi_matched and not (original.get("title") or original.get("authors") or original.get("journal")):
+                logger.info(f"  [DOI] 完全匹配且无其他字段，相似度=100%")
+                return 1.0
+            
+            # PMID完全匹配
+            if original.get("pmid") and matched.get("pmid"):
+                if str(original["pmid"]).strip() == str(matched["pmid"]).strip():
+                    total_score += 1.0 * self.weights["pmid"]
+                    total_weight += self.weights["pmid"]
+                    details.append(f"PMID匹配 (权重{self.weights['pmid']}): 得分1.0")
+                else:
+                    total_weight += self.weights["pmid"]
+                    details.append(f"PMID不匹配: {original['pmid']} != {matched['pmid']}")
         
         # 标题相似度
         if original.get("title") and matched.get("title"):

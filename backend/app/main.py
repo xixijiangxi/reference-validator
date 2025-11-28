@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 import logging
 import sys
+import os
 
 # 配置日志 - 输出到控制台
 logging.basicConfig(
@@ -26,9 +27,17 @@ logger.info("参考文献校验工具 API 启动中...")
 logger.info("="*80)
 
 # 配置CORS
+# 注意：生产环境应指定具体域名，不要使用 ["*"]
+# 通过环境变量 ALLOWED_ORIGINS 配置允许的来源，多个用逗号分隔
+# 如果设置为 "*"，则允许所有来源（仅用于测试和开发）
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+if allowed_origins_env == "*":
+    ALLOWED_ORIGINS = ["*"]
+else:
+    ALLOWED_ORIGINS = allowed_origins_env.split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

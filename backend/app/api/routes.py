@@ -67,8 +67,12 @@ async def search_reference(reference_id: str, keywords: Dict[str, Any]):
     logger.info(f"【API /search】收到参考文献检索请求: {reference_id}")
     logger.info(f"输入关键词: {keywords}")
     
+    # 提取智能匹配参数
+    use_smart_matching = keywords.get("use_smart_matching", False)
+    logger.info(f"智能匹配: {'启用' if use_smart_matching else '禁用'}")
+    
     try:
-        # 转换关键词格式
+        # 转换关键词格式（排除use_smart_matching）
         keywords_dict = {
             "title": keywords.get("title"),
             "authors": keywords.get("authors"),
@@ -82,7 +86,7 @@ async def search_reference(reference_id: str, keywords: Dict[str, Any]):
         }
         
         # 搜索文章
-        articles = await pubmed_service.search_articles(keywords_dict)
+        articles = await pubmed_service.search_articles(keywords_dict, use_smart_matching=use_smart_matching)
         
         if not articles:
             logger.info(f"【API /search】未找到匹配文章: {reference_id}")
@@ -92,13 +96,12 @@ async def search_reference(reference_id: str, keywords: Dict[str, Any]):
                 "status": "not_found"
             }
         
-        logger.info(f"【API /search】找到 {len(articles)} 篇候选文章，开始计算相似度")
+        logger.info(f"【API /search】检索服务返回 {len(articles)} 篇文章（已内部评估和筛选）")
         
-        # 计算相似度
+        # search_articles 已经在内部完成了评估和筛选，这里只需要构建响应对象
+        # 使用文章中的相似度信息（如果存在），否则重新计算
         matched_articles = []
-        for idx, article in enumerate(articles, 1):
-            logger.info(f"\n处理第 {idx}/{len(articles)} 篇文章: PMID={article.get('pmid')}")
-            
+        for article in articles:
             article_keywords = {
                 "title": article.get("title"),
                 "authors": article.get("authors", []),
@@ -111,48 +114,48 @@ async def search_reference(reference_id: str, keywords: Dict[str, Any]):
                 "doi": article.get("doi")
             }
             
-            similarity = similarity_service.calculate_similarity(
-                keywords_dict,
-                article_keywords
-            )
-            
-            # 只返回相似度>=0.5的文章
-            if similarity >= 0.5:
-                logger.info(f"  相似度 {similarity:.4f} >= 0.5，加入结果列表")
-                differences = similarity_service.find_differences(
-                    keywords_dict,
-                    article_keywords
-                )
-                
-                matched_article = PubMedArticle(
-                    pmid=article.get("pmid"),
-                    title=article.get("title"),
-                    authors=article.get("authors", []),
-                    journal=article.get("journal"),
-                    year=article.get("year"),
-                    volume=article.get("volume"),
-                    issue=article.get("issue"),
-                    pages=article.get("pages"),
-                    doi=article.get("doi"),
-                    abstract=article.get("abstract"),
-                    keywords=ReferenceKeyword(**article_keywords),
-                    similarity_score=similarity,
-                    differences=differences
-                )
-                matched_articles.append(matched_article)
+            # 使用文章中的相似度信息（如果存在），否则重新计算
+            if "_similarity_score" in article:
+                similarity = article["_similarity_score"]
+                # 移除临时字段
+                del article["_similarity_score"]
             else:
-                logger.info(f"  相似度 {similarity:.4f} < 0.5，过滤掉")
-        
-        # 按相似度排序
-        matched_articles.sort(key=lambda x: x.similarity_score, reverse=True)
+                similarity = similarity_service.calculate_similarity(keywords_dict, article_keywords)
+            
+            # 获取匹配类型（如果存在）
+            match_type = article.get("_match_type")
+            if match_type and "_match_type" in article:
+                # 移除临时字段
+                del article["_match_type"]
+            
+            differences = similarity_service.find_differences(keywords_dict, article_keywords)
+            
+            matched_article = PubMedArticle(
+                pmid=article.get("pmid"),
+                title=article.get("title"),
+                authors=article.get("authors", []),
+                journal=article.get("journal"),
+                year=article.get("year"),
+                volume=article.get("volume"),
+                issue=article.get("issue"),
+                pages=article.get("pages"),
+                doi=article.get("doi"),
+                abstract=article.get("abstract"),
+                keywords=ReferenceKeyword(**article_keywords),
+                similarity_score=similarity,
+                differences=differences,
+                match_type=match_type
+            )
+            matched_articles.append(matched_article)
+            match_type_str = f" ({match_type})" if match_type else ""
+            logger.info(f"  文章 PMID={article.get('pmid')}, 相似度={similarity:.4f}{match_type_str}")
         logger.info(f"\n相似度排序后，共 {len(matched_articles)} 篇匹配文章")
         for idx, art in enumerate(matched_articles, 1):
-            logger.info(f"  [{idx}] PMID={art.pmid}, 相似度={art.similarity_score:.4f}, 标题={art.title[:60]}...")
+            match_type_info = f", 匹配类型={art.match_type}" if art.match_type else ""
+            logger.info(f"  [{idx}] PMID={art.pmid}, 相似度={art.similarity_score:.4f}{match_type_info}, 标题={art.title[:60]}...")
         
-        # 如果相似度100%，只返回第一篇
-        if matched_articles and matched_articles[0].similarity_score >= 1.0:
-            logger.info(f"发现100%匹配文章，只返回第一篇: PMID={matched_articles[0].pmid}")
-            matched_articles = [matched_articles[0]]
+        # 注意：不再截断结果，即使相似度100%也返回所有匹配的文章（包括DOI匹配的文章）
+        # 这样用户可以看到所有可能的匹配结果并选择
         
         status = "matched" if matched_articles else "not_found"
         

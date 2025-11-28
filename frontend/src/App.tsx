@@ -13,55 +13,63 @@ function App() {
   const [hasProcessed, setHasProcessed] = useState(false); // 是否已处理过
   const [progressStatus, setProgressStatus] = useState<string>(''); // 进度状态
   const [isDataAreaCollapsed, setIsDataAreaCollapsed] = useState(false); // 右侧区域是否收缩
-  const [inputAreaHeight, setInputAreaHeight] = useState<number>(80); // 输入区高度（像素），默认80px
+  const [inputAreaHeight, setInputAreaHeight] = useState<number>(120); // 输入区高度（像素），默认120px
+  const [useSmartMatching, setUseSmartMatching] = useState<boolean>(true); // 智能匹配状态，默认启用
 
   // 处理输入的参考文献
-  const handleProcess = async (refs: ReferenceItem[]) => {
+  const handleProcess = async (refs: ReferenceItem[], useSmartMatching: boolean) => {
+    setUseSmartMatching(useSmartMatching); // 保存智能匹配状态
     console.log('='.repeat(80));
     console.log(`【前端 App】开始处理 ${refs.length} 条参考文献`);
+    console.log(`【前端 App】智能匹配: ${useSmartMatching ? '启用' : '禁用'}`);
     
+    // 先设置进度状态，再设置loading，确保进度能立即显示
+    setProgressStatus('提取关键词...');
     setLoading(true);
-    setReferences(refs);
+    // 先清空之前的引用，显示"处理中"状态
+    setReferences([]);
 
-    // 关键词提取状态（拆分已在InputArea中显示）
-    setProgressStatus('关键词提取...');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 使用requestAnimationFrame确保状态立即更新到UI
+    await new Promise(resolve => requestAnimationFrame(resolve));
 
     // 为每条参考文献搜索匹配的文章
-    setProgressStatus('PubMed检索与匹配...');
-    const updatedRefs = await Promise.all(
-      refs.map(async (ref, idx) => {
-        console.log(`\n【前端 App】处理第 ${idx + 1}/${refs.length} 条: ${ref.id}`);
-        console.log(`  原始文本: ${ref.original_text.substring(0, 80)}...`);
-        console.log(`  提取的关键词:`, ref.extracted_keywords);
+    const updatedRefs = [];
+    for (let idx = 0; idx < refs.length; idx++) {
+      const ref = refs[idx];
+      // 更新进度状态
+      setProgressStatus(`正在检索第 ${idx + 1}/${refs.length} 条参考文献...`);
+      
+      console.log(`\n【前端 App】处理第 ${idx + 1}/${refs.length} 条: ${ref.id}`);
+      console.log(`  原始文本: ${ref.original_text.substring(0, 80)}...`);
+      console.log(`  提取的关键词:`, ref.extracted_keywords);
+      
+      try {
+        console.log(`  发送检索请求: POST /api/search/${ref.id}`);
+        const result = await referenceAPI.searchReference(
+          ref.id,
+          ref.extracted_keywords,
+          useSmartMatching
+        );
         
-        try {
-          console.log(`  发送检索请求: POST /api/search/${ref.id}`);
-          const result = await referenceAPI.searchReference(
-            ref.id,
-            ref.extracted_keywords
-          );
-          
-          console.log(`  检索结果: status=${result.status}, 匹配文章数=${result.matched_articles.length}`);
-          result.matched_articles.forEach((article: any, artIdx: number) => {
-            console.log(`    [${artIdx + 1}] PMID=${article.pmid}, 相似度=${article.similarity_score}, 标题=${article.title?.substring(0, 50)}...`);
-          });
-          
-          return {
-            ...ref,
-            matched_articles: result.matched_articles,
-            status: result.status as any,
-          };
-        } catch (error) {
-          console.error(`【前端 App】搜索 ${ref.id} 失败:`, error);
-          return {
-            ...ref,
-            matched_articles: [],
-            status: 'not_found' as any,
-          };
-        }
-      })
-    );
+        console.log(`  检索结果: status=${result.status}, 匹配文章数=${result.matched_articles.length}`);
+        result.matched_articles.forEach((article: any, artIdx: number) => {
+          console.log(`    [${artIdx + 1}] PMID=${article.pmid}, 相似度=${article.similarity_score}, 标题=${article.title?.substring(0, 50)}...`);
+        });
+        
+        updatedRefs.push({
+          ...ref,
+          matched_articles: result.matched_articles,
+          status: result.status as any,
+        });
+      } catch (error) {
+        console.error(`【前端 App】搜索 ${ref.id} 失败:`, error);
+        updatedRefs.push({
+          ...ref,
+          matched_articles: [],
+          status: 'not_found' as any,
+        });
+      }
+    }
 
     console.log(`\n【前端 App】所有参考文献处理完成`);
     setReferences(updatedRefs);
@@ -141,9 +149,39 @@ function App() {
     return `${authorStr} ${yearStr}. ${title || ''}. ${journalStr}, ${volumeStr}${issueStr}${pagesStr}${doiStr}`.trim();
   };
 
-  // 更新最终结果
-  const handleUpdateResults = (updated: ProcessedReference[]) => {
-    setProcessedReferences(updated);
+  // 更新单条参考文献（用于编辑后的重新验证）
+  const handleUpdateReference = (refId: string, updatedRef: ReferenceItem) => {
+    setReferences(prevRefs => {
+      const index = prevRefs.findIndex(r => r.id === refId);
+      if (index >= 0) {
+        const newRefs = [...prevRefs];
+        newRefs[index] = updatedRef;
+        return newRefs;
+      }
+      return prevRefs;
+    });
+    
+    // 同时更新processedReferences
+    // 如果用户编辑了，使用修改后的关键词重新格式化文本
+    setProcessedReferences(prevProcessed => {
+      const index = prevProcessed.findIndex(r => r.id === refId);
+      if (index >= 0) {
+        const newProcessed = [...prevProcessed];
+        // 根据修改后的关键词生成新的文本（不含PMID）
+        const keywords = { ...updatedRef.extracted_keywords };
+        delete keywords.pmid; // 移除PMID
+        const updatedText = formatReference(keywords, updatedRef.format_type || 'original');
+        
+        newProcessed[index] = {
+          id: refId,
+          text: updatedText, // 使用修改后的内容
+          data: keywords,
+          format_type: updatedRef.format_type,
+        };
+        return newProcessed;
+      }
+      return prevProcessed;
+    });
   };
 
   return (
@@ -180,7 +218,7 @@ function App() {
                 className="relative overflow-hidden"
                 style={{ 
                   height: `${inputAreaHeight}px`, 
-                  minHeight: '80px', 
+                  minHeight: '100px', 
                   maxHeight: 'calc(100% - 200px)',
                   flexShrink: 0
                 }}
@@ -189,9 +227,10 @@ function App() {
                   <InputArea 
                     onProcess={handleProcess} 
                     loading={loading} 
-                    progressStatus={progressStatus}
                     isCompact={true}
+                    progressStatus={progressStatus}
                     onProgressChange={setProgressStatus}
+                    showProgressInCompact={isDataAreaCollapsed}
                   />
                 </div>
               </div>
@@ -232,7 +271,6 @@ function App() {
               >
                 <ResultArea
                   references={processedReferences}
-                  onUpdate={handleUpdateResults}
                   detectedFormat={detectedFormat}
                 />
               </div>
@@ -263,6 +301,10 @@ function App() {
                     <DataDisplayArea
                       references={references}
                       onReplace={handleReplace}
+                      onUpdate={handleUpdateReference}
+                      isLoading={loading}
+                      progressStatus={progressStatus}
+                      useSmartMatching={useSmartMatching}
                     />
                   </div>
                   {/* 收缩按钮 */}

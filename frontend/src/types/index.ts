@@ -24,6 +24,7 @@ export interface PubMedArticle {
   keywords: ReferenceKeyword;
   similarity_score: number;
   differences: Record<string, any>;
+  match_type?: string; // "doi_match" 或 "pmid_match"，表示通过DOI或PMID匹配到的文章
 }
 
 export interface ReferenceItem {

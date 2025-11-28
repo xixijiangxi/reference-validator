@@ -168,6 +168,22 @@ npm run dev
 3. **网络连接**：需要稳定的网络连接访问PubMed API
 4. **处理时间**：大量参考文献处理可能需要较长时间，请耐心等待
 
+## 部署和分享
+
+想要将应用分享给其他人体验？请查看 [部署指南](DEPLOYMENT_GUIDE.md)
+
+**快速方式（推荐）：**
+1. 使用 ngrok 内网穿透（最简单）
+2. 运行 `start_with_ngrok.bat` 脚本
+3. 分享 ngrok 生成的公网地址
+
+**其他方式：**
+- 局域网访问：运行 `start_lan.bat`（同一 WiFi）
+- 云服务器部署：Railway、Render 等
+- Docker 容器化：使用 `docker-compose.yml`
+
+详见 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
 ## 许可证
 
 MIT License

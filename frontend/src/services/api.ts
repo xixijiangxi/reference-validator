@@ -20,9 +20,13 @@ export const referenceAPI = {
   // 搜索参考文献
   searchReference: async (
     referenceId: string,
-    keywords: ReferenceKeyword
+    keywords: ReferenceKeyword,
+    useSmartMatching: boolean = false
   ): Promise<{ matched_articles: PubMedArticle[]; status: string }> => {
-    const response = await api.post(`/search/${referenceId}`, keywords);
+    const response = await api.post(`/search/${referenceId}`, {
+      ...keywords,
+      use_smart_matching: useSmartMatching
+    });
     return response.data;
   },
 

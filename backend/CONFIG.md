@@ -48,3 +48,4 @@ EOF
 - 确保 `.env` 文件在 `backend` 目录下
 - API Key格式通常以 `sk-` 开头
 
+
